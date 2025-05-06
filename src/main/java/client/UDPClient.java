@@ -2,15 +2,15 @@ package client;
 
 import shared.commands.*;
 import shared.utils.SerializationUtils;
-import java.io.IOException;
+import java.io.*;
 import java.net.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
-import java.util.Scanner;
+import java.nio.*;
+import java.nio.channels.*;
+import java.util.*;
 
 public class UDPClient {
     private static final int TIMEOUT_MS = 5000;
-    private static final int RETRY_DELAY_MS = 3000;
+    private static final int BUFFER_SIZE = 65535;
 
     private final String host;
     private final int port;
@@ -52,8 +52,14 @@ public class UDPClient {
             String input = scanner.nextLine().trim();
 
             if ("exit".equalsIgnoreCase(input)) {
+                try {
+                    // Отправляем команду exit на сервер
+                    processCommand("exit");
+                } catch (Exception e) {
+                    System.out.println("Ошибка при завершении: " + e.getMessage());
+                }
                 System.out.println("Завершение работы клиента...");
-                break;
+                break;  // Только завершаем клиент
             }
 
             if (input.isEmpty()) continue;
@@ -62,7 +68,6 @@ public class UDPClient {
                 processCommand(input);
             } catch (ServerUnavailableException e) {
                 System.out.println(e.getMessage());
-                System.out.println("Попробуйте позже или проверьте соединение");
             }
         }
     }
@@ -70,8 +75,10 @@ public class UDPClient {
     private void processCommand(String input) throws ServerUnavailableException, IOException {
         try {
             Command command = CommandParser.parse(input);
+            if (command == null) return;
+
             String response = sendCommandWithRetry(command);
-            System.out.println("Сервер: \n" + response);
+            System.out.println("Ответ сервера:\n" + response);
         } catch (IllegalArgumentException e) {
             System.out.println("Ошибка: " + e.getMessage());
         }
@@ -83,55 +90,54 @@ public class UDPClient {
         byte[] data = SerializationUtils.serialize(command);
         ByteBuffer buffer = ByteBuffer.wrap(data);
 
-        System.out.print("Отправка команды... ");
         channel.send(buffer, serverAddress);
+        System.out.println("Команда отправлена");
 
-        try {
-            String response = receiveResponse();
-            System.out.print("✓ ");
-            return response;
-        } catch (SocketTimeoutException e) {
-            System.out.println();
-            throw new ServerUnavailableException("Сервер временно недоступен");
-        }
+        return receiveResponse();
     }
 
-    private String receiveResponse() throws IOException, SocketTimeoutException {
-        ByteBuffer buffer = ByteBuffer.allocate(65535);
+    private String receiveResponse() throws IOException, ServerUnavailableException {
+        ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
         long startTime = System.currentTimeMillis();
 
         while (System.currentTimeMillis() - startTime < TIMEOUT_MS) {
-            if (channel.receive(buffer) != null) {
+            buffer.clear();
+            SocketAddress addr = channel.receive(buffer);
+
+            if (addr != null) {
                 buffer.flip();
-                return new String(buffer.array(), 0, buffer.limit());
+                byte[] responseData = new byte[buffer.remaining()];
+                buffer.get(responseData);
+                try {
+                    return (String) SerializationUtils.deserialize(responseData);
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
             }
+
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new IOException("Поток был прерван");
+                throw new IOException("Поток прерван");
             }
         }
-        throw new SocketTimeoutException();
+
+        throw new ServerUnavailableException("Сервер не отвечает. Попробуйте позже.");
     }
 
     private void closeResources() {
         try {
-            if (channel != null && channel.isOpen()) {
-                channel.close();
-            }
+            if (channel != null) channel.close();
         } catch (IOException e) {
-            System.err.println("Ошибка при закрытии соединения: " + e.getMessage());
+            System.err.println("Ошибка закрытия канала: " + e.getMessage());
         }
     }
 
-    public static void main(String[] args) {
-        new UDPClient("localhost", 12345).start();
-    }
-}
 
 class ServerUnavailableException extends Exception {
     public ServerUnavailableException(String message) {
         super(message);
     }
+}
 }

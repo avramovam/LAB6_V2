@@ -14,7 +14,6 @@ import java.util.stream.*;
 public class CollectionManager {
     private PriorityQueue<Movie> collection = new PriorityQueue<>();
     private LocalDateTime initializationDate;
-    private String csvFilePath;
     private static final String EMPTY_COLLECTION_MSG = "Коллекция пуста";
     private static final String DEFAULT_FILENAME = "collection.csv";
     private String filePath;
@@ -61,25 +60,33 @@ public class CollectionManager {
     }
 
     private void loadCollection() {
-        try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath))) {
-            // Пропускаем заголовок
-            reader.readLine();
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            System.out.println("Файл коллекции не найден, будет создан новый");
+            return;
+        }
+
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
+            reader.readLine(); // Пропускаем заголовок
 
             String line;
             while ((line = reader.readLine()) != null) {
                 try {
                     Movie movie = parseCsvLine(line);
                     if (movie != null) {
-                        collection.add(movie);
+                        if (isPassportIdUnique(movie.getDirector().getPassportID())) {
+                            collection.add(movie);
+                        } else {
+                            System.err.println("Обнаружен дубликат passportID: " + line);
+                        }
                     }
                 } catch (Exception e) {
                     System.err.println("Ошибка парсинга строки: " + line);
                 }
             }
-
-            System.out.printf("Загружено %d элементов из %s\n", collection.size(), filePath);
+            System.out.println("Загружено " + collection.size() + " элементов");
         } catch (IOException e) {
-            System.err.println("Ошибка чтения файла коллекции: " + e.getMessage());
+            System.err.println("Ошибка чтения файла: " + e.getMessage());
         }
     }
 
@@ -145,7 +152,7 @@ public class CollectionManager {
     public String removeHead() {
         Movie head = collection.poll();
         return head != null
-                ? "Первый элемент:\n" + head
+                ? "Первый элемент удален:\n" + head
                 : "Коллекция пуста";
     }
 
@@ -205,46 +212,21 @@ public class CollectionManager {
 
     // =============== Работа с файлом ===============
 
-    public void save() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(csvFilePath))) {
+    public synchronized void save() {
+        Path path = Paths.get(filePath);
+        try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(path))) {
+            // Заголовок CSV
             writer.println("id,name,coordinates_x,coordinates_y,creationDate,oscarsCount,length,genre,mpaaRating,director_name,director_passportID,director_location_x,director_location_y,director_location_name");
-
+            System.out.println("Старт сохранения коллекции...");
+            // Данные
             collection.stream()
+                    .sorted()
                     .map(this::movieToCsvLine)
                     .forEach(writer::println);
 
+            System.out.println("Коллекция сохранена в " + path.toAbsolutePath());
         } catch (IOException e) {
-            System.err.println("Ошибка сохранения файла: " + e.getMessage());
-        }
-    }
-
-    private void loadFromCsv() {
-        Path path = Paths.get(csvFilePath);
-        if (!Files.exists(path)) {
-            System.out.println("Файл не существует, создана новая коллекция");
-            return;
-        }
-
-        try (BufferedReader reader = Files.newBufferedReader(path)) {
-            // Пропускаем заголовок
-            reader.readLine();
-
-            String line;
-            while ((line = reader.readLine()) != null) {
-                try {
-                    Movie movie = parseCsvLine(line);
-                    if (movie != null) {
-                        collection.add(movie);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Ошибка парсинга строки: " + line);
-                    e.printStackTrace();
-                }
-            }
-
-            System.out.println("Загружено фильмов: " + collection.size());
-        } catch (IOException e) {
-            System.err.println("Ошибка чтения файла: " + e.getMessage());
+            System.err.println("Ошибка сохранения коллекции: " + e.getMessage());
         }
     }
 
@@ -252,7 +234,7 @@ public class CollectionManager {
 
     private Movie parseCsvLine(String csvLine) {
         String[] values = csvLine.split(",");
-        if (values.length < 14) {
+        if (values.length < 13) {
             System.err.println("Ошибка: в строке недостаточно данных - " + csvLine);
             return null;
         }
@@ -265,11 +247,13 @@ public class CollectionManager {
             );
 
             // Парсим режиссера
-            Location location = new Location(
-                    Long.parseLong(values[11]),
-                    Double.parseDouble(values[12]),
-                    values.length > 13 && !values[13].isEmpty() ? values[13] : null
-            );
+            Location location = new Location();
+            location.setX(Long.parseLong(values[11]));
+            location.setY(Double.parseDouble(values[12]));
+            if (values.length == 14) {
+                location.setName(values[13]);
+            }
+
             Person director = new Person(
                     values[9],
                     values[10],

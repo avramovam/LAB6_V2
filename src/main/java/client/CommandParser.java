@@ -16,6 +16,10 @@ public class CommandParser {
         String command = parts[0].toLowerCase();
         String args = parts.length > 1 ? parts[1] : "";
 
+        if (command.startsWith("#")) {
+            throw new IllegalArgumentException("Серверные команды недоступны клиенту");
+        }
+
         try {
             switch (command) {
                 case "help":
@@ -76,9 +80,6 @@ public class CommandParser {
 
     private static UpdateCommand parseUpdateCommand(String args) {
         String[] parts = args.split("\\s+", 2);
-        if (parts.length < 1) {
-            throw new IllegalArgumentException("Требуется указать ID");
-        }
         int id = parseId(parts[0]);
         return new UpdateCommand(id, MovieFactory.createMovieInteractive());
     }

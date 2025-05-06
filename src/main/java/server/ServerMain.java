@@ -1,7 +1,7 @@
 package server;
 
 public class ServerMain {
-    private static final String ENV_VAR_NAME = "LAB5_COLLECTION";
+    private static final String ENV_VAR_NAME = "/Users/macbook/Desktop/лабы/Java/LAB6_secondVersion/collection.csv";
 
     public static void main(String[] args) {
         System.out.println("=== Запуск сервера ===");
@@ -12,11 +12,11 @@ public class ServerMain {
 
         // Обработка завершения работы
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("\nЗавершение работы сервера...");
+            System.out.println("\nСервер завершает работу...");
             manager.save();
-            server.stop();
         }));
 
+        // Основной цикл сервера
         server.start();
     }
 }

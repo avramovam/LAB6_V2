@@ -18,6 +18,20 @@ public class Location implements Serializable {
         this.name = name;  // Допускается null
     }
 
+    public void setX(long x) {
+        this.x = x;
+    }
+
+    public void setY(double y) {
+        this.y = y;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Location() {}
+
     // Геттеры без валидации
     public long getX() { return x; }
     public double getY() { return y; }
