@@ -28,15 +28,18 @@ public class CollectionManager {
     }
 
     private String resolveFilePath(String envVarName) {
-        // 1. Проверяем переменную окружения
-        String envPath = System.getenv(envVarName);
-        if (envPath != null && !envPath.trim().isEmpty()) {
-            return envPath;
-        }
-
-        // 2. Используем файл в рабочей директории
-        return Paths.get("").toAbsolutePath() + File.separator + DEFAULT_FILENAME;
+            // 1. Проверяем переменную окружения
+            String envPath = System.getenv(envVarName);
+            if (envPath != null && !envPath.trim().isEmpty() && Paths.get(envPath).toFile().exists()) {
+                System.out.println("Используемая переменная окружения: " + envPath);
+                return envPath;
+            } else {
+                // 2. Используем файл в рабочей директории
+                System.out.println("Переменная окружения не установлена или файл не существует. Используется файл collection.csv");
+                return DEFAULT_FILENAME;
+            }
     }
+
 
     private void initializeCollectionFile() {
         Path path = Paths.get(filePath);

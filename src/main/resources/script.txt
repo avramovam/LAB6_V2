@@ -1,3 +1,4 @@
 show
 info
-execute_script /Users/macbook/Desktop/лабы/Java/LAB6_secondVersion/src/main/resources/script 2
+execute_script /Users/macbook/Desktop/лабы/Java/LAB6_secondVersion/src/main/resources/script2.txt
+remove 1
